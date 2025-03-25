@@ -1,3 +1,5 @@
+"use strict";
+
 import NextAuth from 'next-auth';
 import GoogleProvider from 'next-auth/providers/google';
 
@@ -13,13 +15,22 @@ const handler = NextAuth({
   ],
   callbacks: {
     async session({ session }) {
-      // store the user id from MongoDB to session
-      const sessionUser = await User.findOne({ email: session.user.email });
-      session.user.id = sessionUser._id.toString();
+      try {
+        await connectToDB();
+
+        // store the user id from MongoDB to session
+        const sessionUser = await User.findOne({ email: session.user.email });
+
+        if (!sessionUser) return session; // Avoid crash if user is not found
+
+        session.user.id = sessionUser._id.toString();
+      } catch (error) {
+        console.error("Error fetching user in session:", error);
+      }
 
       return session;
     },
-    async signIn({ account, profile, user, credentials }) {
+    async signIn({ account, profile }) {
       try {
         await connectToDB();
 
@@ -30,18 +41,18 @@ const handler = NextAuth({
         if (!userExists) {
           await User.create({
             email: profile.email,
-            username: profile.name.replace(" ", "").toLowerCase(),
-            image: profile.picture,
+            username: profile.name.replace(/\s+/g, "").toLowerCase(), // Replace spaces more efficiently
+            image: profile.image, // Ensure correct property
           });
         }
 
-        return true
+        return true;
       } catch (error) {
-        console.log("Error checking if user exists: ", error.message);
-        return false
+        console.error("Error checking if user exists:", error);
+        return false;
       }
     },
   }
-})
+});
 
-export { handler as GET, handler as POST }
+export { handler as GET, handler as POST };
